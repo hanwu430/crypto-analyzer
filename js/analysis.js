@@ -9,9 +9,11 @@ const AnalysisEngine = {
      * 分析单个指标并打分
      * @param {Object} indicators - Indicators.calculateAll 的输出
      * @param {Object|null} lsrData - 多空比数据
+     * @param {Object|null} fngData - 恐慌贪婪指数
+     * @param {Object[]|null} newsData - 新闻头条
      * @returns {Object} 分析结果
      */
-    analyze(indicators, lsrData) {
+    analyze(indicators, lsrData, fngData, newsData) {
         const scores = [];
         const details = [];
 
@@ -96,6 +98,28 @@ const AnalysisEngine = {
             barValue: trendScore.score > 0 ? 7.5 : trendScore.score < 0 ? 2.5 : 5,
         });
 
+        // === 8. 恐慌贪婪指数 (权重: 1.5, 逆势指标) ===
+        const fngScore = this._analyzeFearGreed(fngData);
+        scores.push({ name: '恐慌贪婪', score: fngScore.score, weight: 1.5, detail: fngScore.detail });
+        details.push({
+            name: '恐慌贪婪指数',
+            value: fngData ? `${fngData.current} (${fngData.classification})` : '无数据',
+            signal: fngScore.signal,
+            description: fngScore.detail,
+            barValue: fngScore.score > 0 ? 7.5 : fngScore.score < 0 ? 2.5 : 5,
+        });
+
+        // === 9. 新闻情绪 (权重: 1.5) ===
+        const newsScore = this._analyzeNews(newsData);
+        scores.push({ name: '新闻情绪', score: newsScore.score, weight: 1.5, detail: newsScore.detail });
+        details.push({
+            name: '新闻情绪分析',
+            value: newsScore.summary,
+            signal: newsScore.signal,
+            description: newsScore.detail,
+            barValue: newsScore.score > 0 ? 7.5 : newsScore.score < 0 ? 2.5 : 5,
+        });
+
         // 计算加权总分
         const totalWeight = scores.reduce((s, item) => s + item.weight, 0);
         const weightedSum = scores.reduce((s, item) => s + item.score * item.weight, 0);
@@ -105,9 +129,10 @@ const AnalysisEngine = {
         const finalScore = Math.round(totalScore * 6);
         const clampedScore = Math.max(-12, Math.min(12, finalScore));
 
-        // 生成建议
-        const recommendation = this._generateRecommendation(clampedScore, details);
+        // 生成建议（传入情绪数据用于增强建议文本）
+        const recommendation = this._generateRecommendation(clampedScore, details, fngData, newsScore);
 
+        // 附加新闻和恐慌数据到返回结果
         return {
             details,
             scores,
@@ -116,6 +141,8 @@ const AnalysisEngine = {
             rawScore: totalScore,
             finalScore: clampedScore,
             recommendation,
+            newsSentiment: newsScore,
+            fearGreed: fngData,
         };
     },
 
@@ -295,13 +322,126 @@ const AnalysisEngine = {
         return { score: -1.5, signal: 'bearish', detail: `价格低于MA60 ${absPct.toFixed(1)}%，严重偏离，超跌可能反弹` };
     },
 
-    _generateRecommendation(score, details) {
+    /**
+     * 恐慌贪婪指数分析 (逆势指标)
+     * 巴菲特原则：别人恐慌时贪婪，别人贪婪时恐慌
+     */
+    _analyzeFearGreed(fngData) {
+        if (!fngData) {
+            return { score: 0, signal: 'neutral', detail: '恐慌指数数据不可用' };
+        }
+        const val = fngData.current;
+        if (val <= 20) return { score: 2, signal: 'bullish', detail: `指数${val}：市场极度恐慌，历史底部区域，是绝佳买入时机` };
+        if (val <= 35) return { score: 1.5, signal: 'bullish', detail: `指数${val}：市场恐慌，大众恐惧时往往是机会` };
+        if (val <= 45) return { score: 0.8, signal: 'bullish', detail: `指数${val}：偏向恐慌，可逢低布局` };
+        if (val <= 55) return { score: 0, signal: 'neutral', detail: `指数${val}：市场情绪中性` };
+        if (val <= 70) return { score: -0.8, signal: 'bearish', detail: `指数${val}：偏向贪婪，注意风险控制` };
+        if (val <= 85) return { score: -1.5, signal: 'bearish', detail: `指数${val}：市场贪婪，FOMO情绪严重，警惕回调` };
+        return { score: -2, signal: 'bearish', detail: `指数${val}：极度贪婪！市场过热，是减仓信号` };
+    },
+
+    /**
+     * 新闻情绪分析
+     * 关键词扫描 + 来源情绪标签
+     */
+    _analyzeNews(newsData) {
+        if (!newsData || newsData.length === 0) {
+            return { score: 0, signal: 'neutral', detail: '无新闻数据', summary: '无数据', headlines: [] };
+        }
+
+        // 情绪关键词词库
+        const BULLISH_WORDS = [
+            'bull', 'bullish', 'rally', 'surge', 'soar', 'pump', 'moon',
+            '暴涨', '突破', '利好', '通过', '批准', 'ETF', '减半', '降息',
+            '合规', '上线', '支持', '牛市', '大涨', '新高', '反弹', '买入',
+            'adopt', 'approve', 'launch', 'partnership', 'halving',
+            'green', 'recover', 'recovery', 'institutional',
+        ];
+        const BEARISH_WORDS = [
+            'bear', 'bearish', 'crash', 'dump', 'plunge', 'collapse', 'decline',
+            '暴跌', '崩盘', '利空', '禁止', '监管', '起诉', '黑客', '攻击',
+            '加息', '通胀', '衰退', '战争', '泡沫', '逃顶', '恐慌', '抛售',
+            'ban', 'hack', 'hacked', 'exploit', 'lawsuit', 'sec', 'crackdown',
+            'war', 'recession', 'inflation', 'crash', 'liquidat',
+        ];
+
+        let bullishCount = 0;
+        let bearishCount = 0;
+        const headlines = [];
+
+        newsData.slice(0, 6).forEach(news => {
+            const title = news.title || '';
+            const lower = title.toLowerCase();
+
+            // 关键词计数
+            let kwBullish = 0, kwBearish = 0;
+            BULLISH_WORDS.forEach(w => { if (lower.includes(w.toLowerCase())) kwBullish++; });
+            BEARISH_WORDS.forEach(w => { if (lower.includes(w.toLowerCase())) kwBearish++; });
+
+            const kwSentiment = kwBullish > kwBearish ? 'positive' :
+                               kwBearish > kwBullish ? 'negative' : 'neutral';
+
+            // 来源情绪优先，否则用关键词
+            const sentiment = news.sentiment !== 'neutral' ? news.sentiment : kwSentiment;
+
+            if (sentiment === 'positive') bullishCount++;
+            else if (sentiment === 'negative') bearishCount++;
+
+            headlines.push({
+                title: title.length > 80 ? title.slice(0, 80) + '...' : title,
+                url: news.url,
+                source: news.source,
+                sentiment,
+                kwBullish,
+                kwBearish,
+            });
+        });
+
+        const total = headlines.length;
+        const bullishRatio = bullishCount / total;
+        const bearishRatio = bearishCount / total;
+
+        let score, signal, detail, summary;
+        if (bullishRatio > 0.5) {
+            score = Math.min(2, bullishRatio * 3);
+            signal = 'bullish';
+            summary = `🟢 偏利好 (${bullishCount}/${total})`;
+            detail = `${bullishCount}条利好 vs ${bearishCount}条利空，市场情绪偏乐观`;
+        } else if (bearishRatio > 0.5) {
+            score = Math.max(-2, -bearishRatio * 3);
+            signal = 'bearish';
+            summary = `🔴 偏利空 (${bearishCount}/${total})`;
+            detail = `${bearishCount}条利空 vs ${bullishCount}条利好，市场情绪偏悲观`;
+        } else {
+            score = 0;
+            signal = 'neutral';
+            summary = `⚪ 中性 (${total}条)`;
+            detail = `多空消息均衡，新闻面影响不大`;
+        }
+
+        return { score, signal, detail, summary, headlines };
+    },
+
+    _generateRecommendation(score, details, fngData, newsSentiment) {
         let verdict, verdictClass, advice;
+
+        // 市场情绪上下文
+        let sentimentNote = '';
+        if (fngData) {
+            if (fngData.current <= 25) sentimentNote = '当前市场极度恐慌，往往是历史大底。';
+            else if (fngData.current >= 80) sentimentNote = '当前市场极度贪婪，注意高位风险。';
+        }
+        if (newsSentiment && newsSentiment.signal === 'bearish' && score >= 3) {
+            sentimentNote += '但新闻面偏空，建议降低仓位等待利空消化。';
+        }
+        if (newsSentiment && newsSentiment.signal === 'bullish' && score <= -3) {
+            sentimentNote += '但新闻面偏暖，可能触发超跌反弹，不宜追空。';
+        }
 
         if (score >= 6) {
             verdict = '🟢 强烈看涨';
             verdictClass = 'strong-bullish';
-            advice = '多项技术指标共振看涨，多头趋势明确。建议可考虑逢低做多，止损设在近期支撑位或MA60下方。注意控制仓位，分批建仓降低风险。';
+            advice = '多项技术指标共振看涨，多头趋势明确。建议可考虑逢低做多，止损设在近期支撑位或MA60下方。' + sentimentNote;
         } else if (score >= 3) {
             verdict = '🟡 偏多';
             verdictClass = 'mild-bullish';

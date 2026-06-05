@@ -190,4 +190,84 @@ const BinanceAPI = {
             return null;
         }
     },
+
+    /**
+     * 获取恐慌贪婪指数 (Fear & Greed Index)
+     * 数据来源: alternative.me, 完全免费无需API Key
+     * 0-25: 极度恐慌, 25-45: 恐慌, 45-55: 中性, 55-75: 贪婪, 75-100: 极度贪婪
+     */
+    async getFearGreedIndex() {
+        try {
+            const data = await this._fetch(
+                'https://api.alternative.me/fng/?limit=7',
+                'fear_greed',
+                60000
+            );
+            if (!data || !data.data || data.data.length === 0) return null;
+            const current = data.data[0];
+            const history = data.data.map(d => ({
+                value: parseInt(d.value),
+                classification: d.value_classification,
+                timestamp: parseInt(d.timestamp) * 1000,
+            }));
+            return {
+                current: parseInt(current.value),
+                classification: current.value_classification,
+                history,
+                bias: current.value <= 25 ? 'strong_bullish' :
+                      current.value <= 45 ? 'bullish' :
+                      current.value <= 55 ? 'neutral' :
+                      current.value <= 75 ? 'bearish' :
+                      'strong_bearish',
+            };
+        } catch (err) {
+            console.warn('恐慌贪婪指数获取失败:', err.message);
+            return null;
+        }
+    },
+
+    /**
+     * 获取加密货币新闻头条
+     * 优先 CryptoPanic，失败则用 Reddit
+     */
+    async getCryptoNews() {
+        try {
+            const data = await this._fetch(
+                'https://cryptopanic.com/api/v1/posts/?public=true&filter=trending&kind=news',
+                'cryptopanic_news',
+                60000
+            );
+            if (data && data.results) {
+                return data.results.slice(0, 8).map(p => ({
+                    title: p.title,
+                    url: p.url,
+                    source: p.source?.title || 'CryptoPanic',
+                    sentiment: p.votes?.positive > p.votes?.negative ? 'positive' :
+                               p.votes?.negative > p.votes?.positive ? 'negative' : 'neutral',
+                    published: p.published_at,
+                }));
+            }
+        } catch (e) { /* fallback to Reddit */ }
+
+        try {
+            const resp = await fetch('https://www.reddit.com/r/CryptoCurrency/hot.json?limit=8');
+            if (resp.ok) {
+                const data = await resp.json();
+                return data.data.children.map(c => {
+                    const post = c.data;
+                    return {
+                        title: post.title,
+                        url: `https://reddit.com${post.permalink}`,
+                        source: 'r/CryptoCurrency',
+                        sentiment: post.upvote_ratio > 0.85 ? 'positive' :
+                                   post.upvote_ratio < 0.6 ? 'negative' : 'neutral',
+                        published: new Date(post.created_utc * 1000).toISOString(),
+                        score: post.score,
+                    };
+                });
+            }
+        } catch (e) { /* fallback */ }
+
+        return null;
+    },
 };

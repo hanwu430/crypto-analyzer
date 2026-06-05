@@ -169,18 +169,20 @@ const App = {
         loading.classList.remove('hidden');
 
         try {
-            // 并行获取数据
-            const [klines, ticker, lsrData] = await Promise.all([
+            // 并行获取数据（技术指标 + 市场情绪）
+            const [klines, ticker, lsrData, fngData, newsData] = await Promise.all([
                 BinanceAPI.getKlines(symbol, interval, 200),
                 BinanceAPI.get24hrTicker(symbol),
                 BinanceAPI.getLongShortRatio(symbol),
+                BinanceAPI.getFearGreedIndex(),
+                BinanceAPI.getCryptoNews(),
             ]);
 
             // 计算技术指标
             const indicators = Indicators.calculateAll(klines);
 
-            // 综合分析
-            const analysis = AnalysisEngine.analyze(indicators, lsrData);
+            // 综合分析（含新闻情绪）
+            const analysis = AnalysisEngine.analyze(indicators, lsrData, fngData, newsData);
             this.analysisResult = analysis;
 
             // 更新UI
@@ -248,8 +250,68 @@ const App = {
             <div class="rec-score ${rec.verdictClass}">📈 综合评分: ${rec.score > 0 ? '+' : ''}${rec.score}/12</div>
             <div class="rec-verdict ${rec.verdictClass}">${rec.verdict}</div>
             <div class="rec-advice">${rec.advice}</div>
-            <div class="rec-disclaimer">⚠️ 免责声明：以上分析仅基于技术指标，不构成投资建议。加密货币市场波动剧烈，请谨慎决策。</div>
+            <div class="rec-disclaimer">⚠️ 免责声明：以上分析仅基于技术指标与市场情绪，不构成投资建议。加密货币市场波动剧烈，请谨慎决策。</div>
         `;
+
+        // 新闻情绪面板
+        this._updateSentimentPanel(analysis);
+    },
+
+    /**
+     * 更新市场情绪面板（恐慌指数 + 新闻）
+     */
+    _updateSentimentPanel(analysis) {
+        const fng = analysis.fearGreed;
+        const newsSentiment = analysis.newsSentiment;
+
+        let html = '<div class="sentiment-section"><h3>📰 市场情绪</h3>';
+
+        // 恐慌贪婪指数仪表
+        if (fng) {
+            const fngPct = fng.current;
+            let fngColor, fngEmoji;
+            if (fngPct <= 25) { fngColor = '#00d4aa'; fngEmoji = '😱'; }
+            else if (fngPct <= 45) { fngColor = '#8ed4a0'; fngEmoji = '😟'; }
+            else if (fngPct <= 55) { fngColor = '#888'; fngEmoji = '😐'; }
+            else if (fngPct <= 75) { fngColor = '#f39c12'; fngEmoji = '😊'; }
+            else { fngColor = '#ff4466'; fngEmoji = '🤩'; }
+
+            html += `
+            <div class="fng-gauge">
+                <div class="fng-header">
+                    <span>${fngEmoji} 恐慌贪婪指数</span>
+                    <span style="color:${fngColor};font-weight:700;">${fngPct} — ${fng.classification}</span>
+                </div>
+                <div class="fng-bar">
+                    <div class="fng-fill" style="width:${fngPct}%;background:${fngColor};"></div>
+                </div>
+                <div class="fng-labels">
+                    <span>0 极度恐慌</span><span>50 中性</span><span>100 极度贪婪</span>
+                </div>
+            </div>`;
+        }
+
+        // 新闻头条
+        if (newsSentiment && newsSentiment.headlines && newsSentiment.headlines.length > 0) {
+            html += '<div class="news-list">';
+            newsSentiment.headlines.forEach(h => {
+                const icon = h.sentiment === 'positive' ? '🟢' : h.sentiment === 'negative' ? '🔴' : '⚪';
+                html += `
+                <a class="news-item" href="${h.url}" target="_blank" rel="noopener">
+                    <span class="news-icon">${icon}</span>
+                    <span class="news-title">${h.title}</span>
+                    <span class="news-source">${h.source}</span>
+                </a>`;
+            });
+            html += '</div>';
+        }
+
+        html += '</div>';
+
+        // 追加到建议面板后面
+        const recPanel = document.getElementById('recommendation-panel');
+        recPanel.innerHTML += html;
+    },
     },
 
     /**

@@ -606,6 +606,107 @@ html, body {
     }
 }
 
+/* 市场情绪面板 */
+.sentiment-section {
+    border-top: 1px solid var(--border-color);
+    padding: 16px 18px;
+}
+
+.sentiment-section h3 {
+    font-size: 15px;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+/* 恐慌贪婪仪表 */
+.fng-gauge {
+    background: var(--bg-panel);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 14px;
+}
+
+.fng-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.fng-bar {
+    height: 8px;
+    background: linear-gradient(90deg, #00d4aa 0%, #8ed4a0 25%, #888 50%, #f39c12 75%, #ff4466 100%);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+    margin-bottom: 6px;
+}
+
+.fng-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    position: absolute;
+    right: 0;
+}
+
+.fng-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* 新闻列表 */
+.news-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.news-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-panel);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text-secondary);
+    font-size: 12px;
+    transition: var(--transition);
+    line-height: 1.4;
+}
+
+.news-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.news-icon {
+    flex-shrink: 0;
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.news-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.news-source {
+    flex-shrink: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
 /* 滚动条样式 */
 ::-webkit-scrollbar {
     width: 6px;
