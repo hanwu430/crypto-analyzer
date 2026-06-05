@@ -326,19 +326,4 @@ const BinanceAPI = {
 
         return mixed.length > 0 ? mixed : null;
     },
-        const seen = new Set();
-        const unique = allNews.filter(n => {
-            const key = n.title.slice(0, 50);
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-        });
-
-        // 确保宏观新闻至少占 1/3
-        const macroNews = unique.filter(n => n.category === 'macro');
-        const cryptoNews = unique.filter(n => n.category === 'crypto');
-        const mixed = [...cryptoNews.slice(0, 6), ...macroNews.slice(0, 3)];
-
-        return mixed.length > 0 ? mixed.slice(0, 10) : null;
-    },
 };
