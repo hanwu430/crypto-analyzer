@@ -37,11 +37,20 @@ const BinanceAPI = {
 
     async _testEndpoint(urls, path) {
         for (let i = 0; i < urls.length; i++) {
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 4000);
             try {
-                const ctrl = new AbortController();
-                const t = setTimeout(() => ctrl.abort(), 5000);
                 const resp = await fetch(urls[i] + path, { signal: ctrl.signal });
                 clearTimeout(t);
+                if (resp.ok) return i;
+            } catch (e) { /* next */ }
+            // 代理也试试
+            try {
+                const ctrl2 = new AbortController();
+                const t2 = setTimeout(() => ctrl2.abort(), 6000);
+                const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(urls[i] + path);
+                const resp = await fetch(proxyUrl, { signal: ctrl2.signal });
+                clearTimeout(t2);
                 if (resp.ok) return i;
             } catch (e) { /* next */ }
         }
@@ -52,25 +61,36 @@ const BinanceAPI = {
     get futuresUrl() { return this.FUTURES_URLS[this._activeFutures]; },
 
     /**
-     * 通用请求（10秒超时）
+     * 通用请求（10秒超时），失败自动走代理
      */
     async _fetch(url, cacheKey = null, ttl = 30000) {
         if (cacheKey && this._cache[cacheKey] && Date.now() - this._cache[cacheKey].ts < ttl) {
             return this._cache[cacheKey].data;
         }
+        // 先直连，失败走代理
+        let resp = await this._doFetch(url);
+        if (!resp) {
+            console.log('直连失败，尝试代理...');
+            const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(url);
+            resp = await this._doFetch(proxyUrl, 15000);
+        }
+        if (!resp) throw new Error('网络请求失败（直连和代理均不可达）');
+        const data = await resp.json();
+        if (cacheKey) this._cache[cacheKey] = { data, ts: Date.now() };
+        return data;
+    },
+
+    async _doFetch(url, timeoutMs = 8000) {
         const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 10000);
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
         try {
             const resp = await fetch(url, { signal: ctrl.signal });
-            clearTimeout(timeout);
+            clearTimeout(t);
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            if (cacheKey) this._cache[cacheKey] = { data, ts: Date.now() };
-            return data;
+            return resp;
         } catch (err) {
-            clearTimeout(timeout);
-            if (err.name === 'AbortError') throw new Error('请求超时');
-            throw err;
+            clearTimeout(t);
+            return null;
         }
     },
 
