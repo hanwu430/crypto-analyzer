@@ -312,7 +312,6 @@ const App = {
         const recPanel = document.getElementById('recommendation-panel');
         recPanel.innerHTML += html;
     },
-    },
 
     /**
      * 返回粒子首页
