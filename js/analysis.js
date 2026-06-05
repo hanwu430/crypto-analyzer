@@ -349,20 +349,27 @@ const AnalysisEngine = {
             return { score: 0, signal: 'neutral', detail: '无新闻数据', summary: '无数据', headlines: [] };
         }
 
-        // 情绪关键词词库
+        // 情绪关键词词库（含宏观政治经济）
         const BULLISH_WORDS = [
             'bull', 'bullish', 'rally', 'surge', 'soar', 'pump', 'moon',
             '暴涨', '突破', '利好', '通过', '批准', 'ETF', '减半', '降息',
             '合规', '上线', '支持', '牛市', '大涨', '新高', '反弹', '买入',
             'adopt', 'approve', 'launch', 'partnership', 'halving',
             'green', 'recover', 'recovery', 'institutional',
+            // 宏观利好
+            'QE', 'stimulus', '放水', '量化宽松', '复苏', 'GDP增长',
+            '就业改善', '贸易协议', '停战', '解禁', '放宽', '减税',
         ];
         const BEARISH_WORDS = [
             'bear', 'bearish', 'crash', 'dump', 'plunge', 'collapse', 'decline',
             '暴跌', '崩盘', '利空', '禁止', '监管', '起诉', '黑客', '攻击',
             '加息', '通胀', '衰退', '战争', '泡沫', '逃顶', '恐慌', '抛售',
             'ban', 'hack', 'hacked', 'exploit', 'lawsuit', 'sec', 'crackdown',
+            // 宏观利空
+            '紧缩', '缩表', '失业', 'GDP下滑', '制裁', '关税', '贸易战',
+            '地缘政治', '冲突', '封锁', '经济危机', '债务危机', '违约',
             'war', 'recession', 'inflation', 'crash', 'liquidat',
+            'tariff', 'sanction', 'conflict', 'geopolitical', 'crisis',
         ];
 
         let bullishCount = 0;

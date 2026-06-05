@@ -296,10 +296,11 @@ const App = {
             html += '<div class="news-list">';
             newsSentiment.headlines.forEach(h => {
                 const icon = h.sentiment === 'positive' ? '🟢' : h.sentiment === 'negative' ? '🔴' : '⚪';
+                const catTag = h.category === 'macro' ? '<span class="news-cat macro">宏观</span>' : '';
                 html += `
                 <a class="news-item" href="${h.url}" target="_blank" rel="noopener">
                     <span class="news-icon">${icon}</span>
-                    <span class="news-title">${h.title}</span>
+                    <span class="news-title">${h.title} ${catTag}</span>
                     <span class="news-source">${h.source}</span>
                 </a>`;
             });

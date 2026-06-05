@@ -203,38 +203,85 @@ const BinanceAPI = {
         }
     },
 
+    /**
+     * 获取综合市场新闻（加密货币 + 宏观经济/政治）
+     * 多源聚合：CryptoPanic → Reddit(币圈+宏观) → Google News
+     */
     async getCryptoNews() {
+        const allNews = [];
+
+        // 1. CryptoPanic (币圈专业新闻)
         try {
             const data = await this._fetch(
                 'https://cryptopanic.com/api/v1/posts/?public=true&filter=trending&kind=news',
                 'cryptopanic_news', 60000
             );
             if (data && data.results) {
-                return data.results.slice(0, 8).map(p => ({
-                    title: p.title, url: p.url,
-                    source: p.source?.title || 'CryptoPanic',
-                    sentiment: p.votes?.positive > p.votes?.negative ? 'positive' :
-                               p.votes?.negative > p.votes?.positive ? 'negative' : 'neutral',
-                    published: p.published_at,
-                }));
+                data.results.slice(0, 6).forEach(p => {
+                    allNews.push({
+                        title: p.title, url: p.url,
+                        source: p.source?.title || 'CryptoPanic',
+                        category: 'crypto',
+                        sentiment: p.votes?.positive > p.votes?.negative ? 'positive' :
+                                   p.votes?.negative > p.votes?.positive ? 'negative' : 'neutral',
+                        published: p.published_at,
+                    });
+                });
             }
         } catch (e) { /* fallback */ }
 
-        try {
-            const resp = await fetch('https://www.reddit.com/r/CryptoCurrency/hot.json?limit=8');
-            if (resp.ok) {
-                const data = await resp.json();
-                return data.data.children.map(c => ({
-                    title: c.data.title,
-                    url: `https://reddit.com${c.data.permalink}`,
-                    source: 'r/CryptoCurrency',
-                    sentiment: c.data.upvote_ratio > 0.85 ? 'positive' :
-                               c.data.upvote_ratio < 0.6 ? 'negative' : 'neutral',
-                    published: new Date(c.data.created_utc * 1000).toISOString(),
-                }));
-            }
-        } catch (e) { /* fallback */ }
+        // 2. Reddit 多板块聚合
+        const subreddits = [
+            { sub: 'CryptoCurrency', category: 'crypto' },
+            { sub: 'economics', category: 'macro' },
+            { sub: 'Finance', category: 'macro' },
+            { sub: 'worldnews', category: 'macro' },
+        ];
 
-        return null;
+        for (const { sub, category } of subreddits) {
+            try {
+                const ctrl = new AbortController();
+                const t = setTimeout(() => ctrl.abort(), 5000);
+                const resp = await fetch(
+                    `https://www.reddit.com/r/${sub}/hot.json?limit=5`,
+                    { signal: ctrl.signal }
+                );
+                clearTimeout(t);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    data.data.children.forEach(c => {
+                        const post = c.data;
+                        // 过滤掉置顶帖和太短的帖
+                        if (post.stickied || post.title.length < 20) return;
+                        allNews.push({
+                            title: post.title,
+                            url: `https://reddit.com${post.permalink}`,
+                            source: `r/${sub}`,
+                            category,
+                            sentiment: post.upvote_ratio > 0.85 ? 'positive' :
+                                       post.upvote_ratio < 0.6 ? 'negative' : 'neutral',
+                            published: new Date(post.created_utc * 1000).toISOString(),
+                            score: post.score,
+                        });
+                    });
+                }
+            } catch (e) { /* next sub */ }
+        }
+
+        // 去重 + 按时间排序 + 限制数量
+        const seen = new Set();
+        const unique = allNews.filter(n => {
+            const key = n.title.slice(0, 50);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        // 确保宏观新闻至少占 1/3
+        const macroNews = unique.filter(n => n.category === 'macro');
+        const cryptoNews = unique.filter(n => n.category === 'crypto');
+        const mixed = [...cryptoNews.slice(0, 6), ...macroNews.slice(0, 3)];
+
+        return mixed.length > 0 ? mixed.slice(0, 10) : null;
     },
 };
