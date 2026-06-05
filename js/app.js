@@ -99,7 +99,7 @@ const App = {
                 BinanceAPI.get24hrTicker(symbol),
                 BinanceAPI.getLongShortRatio(symbol),
                 BinanceAPI.getFearGreedIndex(),
-                BinanceAPI.getCryptoNews(),
+                BinanceAPI.getCryptoNews(symbol),  // 币种特定新闻
             ]);
 
             const indicators = Indicators.calculateAll(klines);
@@ -180,10 +180,12 @@ const App = {
             html += '<div class="news-list">';
             ns.headlines.forEach(h => {
                 const icon = h.sentiment === 'positive' ? '🟢' : h.sentiment === 'negative' ? '🔴' : '⚪';
-                const catTag = h.category === 'macro' ? '<span class="news-cat macro">宏观</span>' : '';
+                let tags = '';
+                if (h.coinSpecific) tags += '<span class="news-cat coin">本币</span>';
+                if (h.category === 'macro') tags += '<span class="news-cat macro">宏观</span>';
                 html += `<a class="news-item" href="${h.url}" target="_blank" rel="noopener">
                     <span class="news-icon">${icon}</span>
-                    <span class="news-title">${h.title} ${catTag}</span>
+                    <span class="news-title">${h.title} ${tags}</span>
                     <span class="news-source">${h.source}</span>
                 </a>`;
             });

@@ -403,6 +403,7 @@ html, body {
 }
 .news-cat { font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 3px; white-space: nowrap; }
 .news-cat.macro { background: rgba(245, 158, 11, 0.2); color: var(--accent-orange); }
+.news-cat.coin { background: rgba(59, 130, 246, 0.2); color: var(--accent-blue); }
 
 /* Toast */
 .toast {

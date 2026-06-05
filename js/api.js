@@ -232,71 +232,100 @@ const BinanceAPI = {
     },
 
     /**
-     * 获取综合市场新闻（加密货币 + 宏观经济/政治）
-     * 多源聚合：CryptoPanic → Reddit(币圈+宏观) → Google News
+     * 获取综合市场新闻
+     * @param {string|null} symbol - 可选，获取指定币种的相关新闻（如 BTCUSDT）
      */
-    async getCryptoNews() {
+    async getCryptoNews(symbol = null) {
         const allNews = [];
+        const coinName = symbol ? symbol.replace('USDT', '') : null;
 
-        // 1. CryptoPanic (币圈专业新闻)
+        // 1. CryptoPanic (全市场 + 特定币种)
         try {
-            const data = await this._fetch(
-                'https://cryptopanic.com/api/v1/posts/?public=true&filter=trending&kind=news',
-                'cryptopanic_news', 60000
-            );
-            if (data && data.results) {
-                data.results.slice(0, 6).forEach(p => {
-                    allNews.push({
-                        title: p.title, url: p.url,
-                        source: p.source?.title || 'CryptoPanic',
-                        category: 'crypto',
-                        sentiment: p.votes?.positive > p.votes?.negative ? 'positive' :
-                                   p.votes?.negative > p.votes?.positive ? 'negative' : 'neutral',
-                        published: p.published_at,
+            const urls = ['https://cryptopanic.com/api/v1/posts/?public=true&filter=trending&kind=news'];
+            if (coinName) {
+                urls.push(`https://cryptopanic.com/api/v1/posts/?public=true&currencies=${coinName}&kind=news`);
+            }
+            for (const url of urls) {
+                const data = await this._fetch(url, null, 30000);
+                if (data?.results) {
+                    data.results.slice(0, 8).forEach(p => {
+                        allNews.push({
+                            title: p.title, url: p.url,
+                            source: p.source?.title || 'CryptoPanic',
+                            category: 'crypto', coinSpecific: url.includes('currencies='),
+                            sentiment: p.votes?.positive > p.votes?.negative ? 'positive' :
+                                       p.votes?.negative > p.votes?.positive ? 'negative' : 'neutral',
+                            published: p.published_at,
+                        });
                     });
-                });
+                }
             }
         } catch (e) { /* fallback */ }
 
-        // 2. Reddit 多板块聚合
-        const subreddits = [
-            { sub: 'CryptoCurrency', category: 'crypto' },
-            { sub: 'economics', category: 'macro' },
-            { sub: 'Finance', category: 'macro' },
-            { sub: 'worldnews', category: 'macro' },
-        ];
-
-        for (const { sub, category } of subreddits) {
+        // 2. 币种相关的 Reddit/Google News 搜索
+        if (coinName) {
             try {
-                const ctrl = new AbortController();
-                const t = setTimeout(() => ctrl.abort(), 5000);
-                const resp = await fetch(
-                    `https://www.reddit.com/r/${sub}/hot.json?limit=5`,
-                    { signal: ctrl.signal }
-                );
-                clearTimeout(t);
+                const resp = await fetch(`https://www.reddit.com/search.json?q=${coinName}+crypto&sort=new&limit=8`);
                 if (resp.ok) {
                     const data = await resp.json();
                     data.data.children.forEach(c => {
                         const post = c.data;
-                        // 过滤掉置顶帖和太短的帖
-                        if (post.stickied || post.title.length < 20) return;
+                        if (post.title.length < 15) return;
                         allNews.push({
-                            title: post.title,
-                            url: `https://reddit.com${post.permalink}`,
-                            source: `r/${sub}`,
-                            category,
-                            sentiment: post.upvote_ratio > 0.85 ? 'positive' :
-                                       post.upvote_ratio < 0.6 ? 'negative' : 'neutral',
+                            title: post.title, url: `https://reddit.com${post.permalink}`,
+                            source: 'Reddit Search', category: 'crypto', coinSpecific: true,
+                            sentiment: post.upvote_ratio > 0.8 ? 'positive' :
+                                       post.upvote_ratio < 0.5 ? 'negative' : 'neutral',
                             published: new Date(post.created_utc * 1000).toISOString(),
-                            score: post.score,
                         });
                     });
                 }
-            } catch (e) { /* next sub */ }
+            } catch (e) { /* fallback */ }
         }
 
-        // 去重 + 按时间排序 + 限制数量
+        // 3. Reddit 宏观板块（仅通用新闻时拉取）
+        if (!coinName) {
+            const macros = ['economics', 'worldnews'];
+            for (const sub of macros) {
+                try {
+                    const ctrl = new AbortController();
+                    const t = setTimeout(() => ctrl.abort(), 4000);
+                    const resp = await fetch(`https://www.reddit.com/r/${sub}/hot.json?limit=4`, { signal: ctrl.signal });
+                    clearTimeout(t);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        data.data.children.forEach(c => {
+                            const post = c.data;
+                            if (post.stickied || post.title.length < 20) return;
+                            allNews.push({
+                                title: post.title, url: `https://reddit.com${post.permalink}`,
+                                source: `r/${sub}`, category: 'macro',
+                                sentiment: post.upvote_ratio > 0.8 ? 'positive' :
+                                           post.upvote_ratio < 0.5 ? 'negative' : 'neutral',
+                                published: new Date(post.created_utc * 1000).toISOString(),
+                            });
+                        });
+                    }
+                } catch (e) { /* next */ }
+            }
+        }
+
+        // 去重 + 排序
+        const seen = new Set();
+        const unique = allNews.filter(n => {
+            const key = n.title.slice(0, 50);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+        // 币种特定新闻优先 + 宏观补充
+        const specific = unique.filter(n => n.coinSpecific);
+        const general = unique.filter(n => !n.coinSpecific);
+        const mixed = [...specific, ...general].slice(0, 10);
+
+        return mixed.length > 0 ? mixed : null;
+    },
         const seen = new Set();
         const unique = allNews.filter(n => {
             const key = n.title.slice(0, 50);
