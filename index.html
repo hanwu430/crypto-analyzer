@@ -7,33 +7,67 @@
     <link rel="stylesheet" href="css/style.css">
     <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
     <script>
-        // CDN fallback: 如果unpkg加载失败，尝试jsdelivr
         if (typeof LightweightCharts === 'undefined') {
             document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');
         }
     </script>
 </head>
 <body>
-    <!-- 粒子首页 -->
-    <div id="particle-page" class="page active">
-        <canvas id="particle-canvas"></canvas>
-        <div class="particle-overlay">
-            <header class="header">
-                <h1 class="title">HanwuFight</h1>
-                <p class="subtitle">点击粒子查看加密货币K线技术分析</p>
+    <!-- 首页看板 -->
+    <div id="dashboard-page" class="page active">
+        <div class="dashboard">
+            <!-- 顶栏 -->
+            <header class="dash-header">
+                <h1 class="dash-title">HanwuFight</h1>
+                <div class="dash-search">
+                    <input type="text" id="search-input" placeholder="搜索币种..." autocomplete="off">
+                </div>
             </header>
-            <div class="search-box">
-                <input type="text" id="search-input" placeholder="搜索币种... (如 BTC, ETH, SOL)" autocomplete="off">
-                <div id="search-results" class="search-results hidden"></div>
+
+            <!-- 市场概览条 -->
+            <div class="market-bar" id="market-bar">
+                <div class="market-item"><span class="market-label">恐慌贪婪</span><span class="market-value" id="mbar-fng">--</span></div>
+                <div class="market-item"><span class="market-label">BTC 价格</span><span class="market-value" id="mbar-btc">--</span></div>
+                <div class="market-item"><span class="market-label">BTC 24h</span><span class="market-value" id="mbar-btc-change">--</span></div>
+                <div class="market-item"><span class="market-label">总市值</span><span class="market-value" id="mbar-total-mcap">--</span></div>
+                <div class="market-item"><span class="market-label">BTC 占比</span><span class="market-value" id="mbar-btc-dom">--</span></div>
             </div>
-        </div>
-        <div class="loading-overlay" id="particle-loading">
-            <div class="spinner"></div>
-            <p>正在加载市场数据...</p>
+
+            <!-- 新闻横幅 -->
+            <div class="news-ticker" id="news-ticker">
+                <div class="news-ticker-label">📰 快讯</div>
+                <div class="news-ticker-content" id="news-ticker-content">加载中...</div>
+            </div>
+
+            <!-- 排行榜表格 -->
+            <div class="table-toolbar">
+                <div class="sort-tabs">
+                    <button class="sort-btn active" data-sort="volume">🔥 热度排名</button>
+                    <button class="sort-btn" data-sort="mcap">📊 市值排名</button>
+                </div>
+                <span class="table-count" id="table-count"></span>
+            </div>
+            <div class="table-wrapper">
+                <table class="crypto-table" id="crypto-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th class="col-name">币种</th>
+                            <th class="col-price">价格</th>
+                            <th class="col-change">24h涨跌</th>
+                            <th class="col-mcap">市值</th>
+                            <th class="col-volume">24h成交量</th>
+                        </tr>
+                    </thead>
+                    <tbody id="crypto-tbody">
+                        <tr><td colspan="6" class="loading-row">正在加载数据...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
-    <!-- 分析页 -->
+    <!-- 分析页（保持不变） -->
     <div id="analysis-page" class="page">
         <div class="analysis-header">
             <button id="btn-back" class="btn-back">← 返回</button>
@@ -63,9 +97,7 @@
                     <button id="btn-refresh" class="btn-refresh">🔄 刷新分析</button>
                 </div>
                 <div id="indicators-panel" class="indicators-panel">
-                    <div class="indicator-item skeleton">
-                        <span class="indicator-name">加载中...</span>
-                    </div>
+                    <div class="indicator-item skeleton"><span class="indicator-name">加载中...</span></div>
                 </div>
                 <div id="recommendation-panel" class="recommendation-panel">
                     <div class="rec-score skeleton">--</div>
@@ -73,10 +105,6 @@
                     <div class="rec-advice skeleton">点击刷新获取分析建议</div>
                 </div>
             </div>
-        </div>
-        <div class="loading-overlay hidden" id="analysis-loading">
-            <div class="spinner"></div>
-            <p>正在加载K线数据...</p>
         </div>
     </div>
 
@@ -86,7 +114,7 @@
     <script src="js/api.js"></script>
     <script src="js/indicators.js"></script>
     <script src="js/analysis.js"></script>
-    <script src="js/particles.js"></script>
+    <script src="js/dashboard.js"></script>
     <script src="js/chart.js"></script>
     <script src="js/app.js"></script>
 </body>

@@ -204,6 +204,34 @@ const BinanceAPI = {
     },
 
     /**
+     * 获取市值排名数据 (CoinGecko, 免费)
+     */
+    async getMarketCapData() {
+        try {
+            const data = await this._fetch(
+                'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false&price_change_percentage=24h',
+                'coingecko_mcap', 60000
+            );
+            return data.map(c => ({
+                id: c.id,
+                symbol: c.symbol.toUpperCase(),
+                name: c.name,
+                image: c.image,
+                price: c.current_price,
+                marketCap: c.market_cap,
+                marketCapRank: c.market_cap_rank,
+                volume24h: c.total_volume,
+                change24h: c.price_change_percentage_24h,
+                high24h: c.high_24h,
+                low24h: c.low_24h,
+            }));
+        } catch (err) {
+            console.warn('市值数据获取失败:', err.message);
+            return null;
+        }
+    },
+
+    /**
      * 获取综合市场新闻（加密货币 + 宏观经济/政治）
      * 多源聚合：CryptoPanic → Reddit(币圈+宏观) → Google News
      */
